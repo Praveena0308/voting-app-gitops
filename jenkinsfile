@@ -1,0 +1,175 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_REPO = 'pravee033'
+        GITOPS_REPO = 'https://github.com/praveena0308/voting-app-gitOps.git'
+        
+        // Images you'll build - FIXED NAMES to match Docker Hub
+        VOTE_IMAGE = "${DOCKER_REPO}/voting-vote:v${BUILD_NUMBER}"
+        RESULT_IMAGE = "${DOCKER_REPO}/voting-result:v${BUILD_NUMBER}"
+        WORKER_IMAGE = "${DOCKER_REPO}/voting-worker:v${BUILD_NUMBER}"
+    }
+    
+    stages {
+        stage('Checkout App Code') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/Praveena0308/example-voting-app.git'
+                    ]]
+                ])
+                // Verify we got the code
+                sh 'ls -la k8s-specifications/'
+            }
+        }
+        
+        stage('Build Images') {
+            parallel {
+                stage('Build Vote') {
+                    steps { 
+                        dir('vote') { 
+                            sh """
+                                echo "Building vote image..."
+                                docker build -t ${VOTE_IMAGE} .
+                            """
+                        } 
+                    }
+                }
+                stage('Build Result') {
+                    steps { 
+                        dir('result') { 
+                            sh """
+                                echo "Building result image..."
+                                docker build -t ${RESULT_IMAGE} .
+                            """
+                        } 
+                    }
+                }
+                stage('Build Worker') {
+                    steps { 
+                        dir('worker') { 
+                            sh """
+                                echo "Building worker image..."
+                                docker build -t ${WORKER_IMAGE} .
+                            """
+                        } 
+                    }
+                }
+            }
+        }
+        
+        stage('Push Images') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'Docker',  // Make sure this matches Jenkins UI
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh """
+                        echo "Logging into Docker Hub..."
+                        docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
+                        
+                        echo "Pushing vote image..."
+                        docker push ${VOTE_IMAGE}
+                        
+                        echo "Pushing result image..."
+                        docker push ${RESULT_IMAGE}
+                        
+                        echo "Pushing worker image..."
+                        docker push ${WORKER_IMAGE}
+                        
+                        echo "✅ All images pushed!"
+                    """
+                }
+            }
+        }
+        
+        stage('Update GitOps Manifests') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'git',  // ADD THIS! Your GitHub credentials
+                    usernameVariable: 'GIT_USER',
+                    passwordVariable: 'GIT_PASS'
+                )]) {
+                    script {
+                        sh """
+                            echo "Cloning YOUR GitOps repo..."
+                            
+                            # Clone using credentials
+                            git clone https://${GIT_USER}:${GIT_PASS}@github.com/praveena0308/voting-app-gitops.git gitops-update
+                            
+                            cd gitops-update
+                            
+                            echo "Current files in your GitOps repo:"
+                            ls -la
+                            
+                            echo "Checking what's in vote-app.yaml:"
+                            grep "image:" vote-app.yaml || echo "No image found in vote-app.yaml"
+                            
+                            echo "Updating image tags..."
+                            
+                            # Update vote-app.yaml - using YOUR current image as pattern
+                            sed -i 's|pravee033/voting-vote:.*|${VOTE_IMAGE}|g' vote-app.yaml
+                            echo "✅ Updated vote-app.yaml → ${VOTE_IMAGE}"
+                            
+                            # Update result-app.yaml
+                            sed -i 's|pravee033/voting-result:.*|${RESULT_IMAGE}|g' result-app.yaml
+                            echo "✅ Updated result-app.yaml → ${RESULT_IMAGE}"
+                            
+                            # Update worker-app.yaml
+                            sed -i 's|pravee033/voting-worker:.*|${WORKER_IMAGE}|g' worker-app.yaml
+                            echo "✅ Updated worker-app.yaml → ${WORKER_IMAGE}"
+                            
+                            # Configure git
+                            git config user.email "jenkins@example.com"
+                            git config user.name "Jenkins CI"
+                            
+                            # Check what changed
+                            echo "Changes to commit:"
+                            git status
+                            git diff
+                            
+                            # Commit and push
+                            git add vote-app.yaml result-app.yaml worker-app.yaml
+                            git commit -m "Deploy voting app v${BUILD_NUMBER}" || echo "No changes to commit"
+                            git push origin main
+                            
+                            echo "🎉 GitOps repo updated successfully!"
+                        """
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo """
+            ✅ PIPELINE SUCCESS!
+            
+            Images built and pushed:
+            - ${VOTE_IMAGE}
+            - ${RESULT_IMAGE}
+            - ${WORKER_IMAGE}
+            
+            GitOps repository updated with new tags.
+            ArgoCD will now auto-deploy these versions.
+            
+            Check ArgoCD UI for deployment status.
+            """
+        }
+        
+        failure {
+            echo "❌ Pipeline failed! Check logs above."
+        }
+        
+        always {
+            // Clean up
+            sh 'docker logout || true'
+            cleanWs()
+        }
+    }
+}
