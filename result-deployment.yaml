@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: result
+  name: result
+  namespace: voting
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: result
+  template:
+    metadata:
+      labels:
+        app: result
+    spec:
+      # Put result pods on result-processor nodes
+      
+      containers:
+      - image: dockersamples/examplevotingapp_result
+        name: result
+        env:
+        - name: POSTGRES_HOST
+          value: "db.database.svc.cluster.local"
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          value: "StrongPassword123"
+        - name: POSTGRES_DB
+          value: "votes"
+        ports:
+        - containerPort: 80
+          name: result

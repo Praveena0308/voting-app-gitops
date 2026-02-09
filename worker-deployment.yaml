@@ -1,0 +1,55 @@
+# worker.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: worker
+  name: worker
+  namespace: voting
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      # Put workers on vote-processor nodes
+      nodeSelector:
+        role: vote-processor
+      
+      # Affinity: Prefer to be on same node as vote pods (for performance)
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - vote
+              topologyKey: "kubernetes.io/hostname"
+      
+      containers:
+      - image: dockersamples/examplevotingapp_worker
+        name: worker
+        env:
+        - name: POSTGRES_HOST
+          value: "db.database.svc.cluster.local"  # Fixed: Full service name
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          value: "StrongPassword123"
+        - name: POSTGRES_DB
+          value: "postgres"
+        - name: REDIS_HOST
+          value: "redis.messaging.svc.cluster.local"  # Fixed
+        - name: REDIS_PORT
+          value: "6379"
+        ports:
+        - containerPort: 80
+          name: worker

@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: vote
+  name: vote
+  namespace: voting
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: vote
+  template:
+    metadata:
+      labels:
+        app: vote
+    spec:
+     
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: role
+                operator: In
+                values:
+                - vote-processor
+        
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - vote
+              topologyKey: "kubernetes.io/hostname"
+      
+      containers:
+      - image: dockersamples/examplevotingapp_vote
+        name: vote
+        env:
+        - name: REDIS
+          value: "redis"  
+        ports:
+        - containerPort: 80
+          name: vote

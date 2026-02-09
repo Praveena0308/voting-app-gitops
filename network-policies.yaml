@@ -1,0 +1,323 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: voting
+spec:
+  podSelector: {}  # Applies to ALL pods in voting namespace
+  policyTypes:
+  - Ingress
+  - Egress
+  # No rules = DENY ALL traffic by default
+
+---
+# 2. DEFAULT DENY ALL - RESULTS NAMESPACE
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: voting
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+---
+# 3. DEFAULT DENY ALL - DATABASE NAMESPACE
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: database
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+---
+# 4. DEFAULT DENY ALL - MESSAGING NAMESPACE
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: messaging
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+---
+# 5. ALLOW INGRESS TO VOTE PODS (External Access)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-vote
+  namespace: voting
+spec:
+  podSelector:
+    matchLabels:
+      app: vote
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow traffic from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx  # Label your ingress namespace
+    ports:
+    - protocol: TCP
+      port: 80  # or 8080 if your vote app uses that
+
+---
+# 6. ALLOW VOTE PODS TO REDIS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-vote-to-redis
+  namespace: voting
+spec:
+  podSelector:
+    matchLabels:
+      app: vote
+  policyTypes:
+  - Egress
+  egress:
+  # Allow vote pods to talk to redis
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: messaging
+      podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+---
+# 7. ALLOW WORKER PODS TO DATABASE & REDIS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-worker-to-db-redis
+  namespace: voting
+spec:
+  podSelector:
+    matchLabels:
+      app: worker
+  policyTypes:
+  - Egress
+  egress:
+  # Allow worker pods to talk to database
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: database
+      podSelector:
+        matchLabels:
+          app: db
+    ports:
+    - protocol: TCP
+      port: 5432
+  
+  # Allow worker pods to talk to redis
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: messaging
+      podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+---
+# 8. ALLOW DATABASE INGRESS FROM WORKERS & RESULTS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-db-ingress
+  namespace: database
+spec:
+  podSelector:
+    matchLabels:
+      app: db
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from voting namespace (worker pods)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: voting
+      podSelector:
+        matchLabels:
+          app: worker
+    ports:
+    - protocol: TCP
+      port: 5432
+  
+  # Allow from results namespace (result pods)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: voting
+      podSelector:
+        matchLabels:
+          app: result
+    ports:
+    - protocol: TCP
+      port: 5432
+  
+  # Allow DB replication between db pods (if you have replication)
+  - from:
+    - podSelector:
+        matchLabels:
+          app: db
+    ports:
+    - protocol: TCP
+      port: 5432
+
+---
+# 9. ALLOW RESULT PODS ACCESS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-result-access
+  namespace: voting
+spec:
+  podSelector:
+    matchLabels:
+      app: result
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from ingress controller (external API access)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 80
+  
+  egress:
+  # Allow result pods to read from database
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: database
+      podSelector:
+        matchLabels:
+          app: db
+    ports:
+    - protocol: TCP
+      port: 5432
+  
+  # Allow result pods to read from redis
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: messaging
+      podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+---
+# 10. ALLOW REDIS INGRESS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis-ingress
+  namespace: messaging
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from voting namespace (vote and worker pods)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: voting
+      podSelector:
+        matchLabels:
+          app: vote
+    ports:
+    - protocol: TCP
+      port: 6379
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: voting
+      podSelector:
+        matchLabels:
+          app: worker
+    ports:
+    - protocol: TCP
+      port: 6379
+  
+  # Allow from results namespace (result pods)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: voting
+      podSelector:
+        matchLabels:
+          app: result
+    ports:
+    - protocol: TCP
+      port: 6379
