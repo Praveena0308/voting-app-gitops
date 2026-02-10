@@ -16,7 +16,7 @@ spec:
       labels:
         app: worker
     
-      
+    sepc: 
       containers:
       - image: pravee033/example-voting-app-worker
         name: worker
