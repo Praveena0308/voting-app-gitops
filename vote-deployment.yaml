@@ -39,7 +39,7 @@ spec:
               topologyKey: "kubernetes.io/hostname"
       
       containers:
-      - image: dockersamples/examplevotingapp_vote
+      - image: pravee033/example-voting-app-vote:latest
         name: vote
         env:
         - name: REDIS
