@@ -5,7 +5,7 @@ metadata:
   labels:
     app: worker
   name: worker
-  namespace: voting
+
 spec:
   replicas: 3
   selector:
@@ -15,24 +15,7 @@ spec:
     metadata:
       labels:
         app: worker
-    spec:
-      # Put workers on vote-processor nodes
-      nodeSelector:
-        role: vote-processor
-      
-      # Affinity: Prefer to be on same node as vote pods (for performance)
-      affinity:
-        podAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - vote
-              topologyKey: "kubernetes.io/hostname"
+    
       
       containers:
       - image: pravee033/example-voting-app-worker

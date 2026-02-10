@@ -4,7 +4,6 @@ metadata:
   labels:
     app: vote
   name: vote
-  namespace: voting
 spec:
   replicas: 4
   selector:
@@ -14,30 +13,6 @@ spec:
     metadata:
       labels:
         app: vote
-    spec:
-     
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: role
-                operator: In
-                values:
-                - vote-processor
-        
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - vote
-              topologyKey: "kubernetes.io/hostname"
-      
       containers:
       - image: pravee033/example-voting-app-vote
         name: vote
