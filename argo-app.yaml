@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: voting-app
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  # Source: Your GitOps repository
+  source:
+    repoURL: https://github.com/praveena0308/voting-app-gitops.git
+    targetRevision: HEAD  # Always use latest commit
+    path: .  # Look in root directory for YAML files
+    
+    # Optional: Directory recursion
+    directory:
+      recurse: true  # Include all YAML files in subdirectories
+      include: '*.yaml'
+  
+  # Destination: Your Kubernetes cluster
+  destination:
+    server: https://kubernetes.default.svc  # Same cluster where ArgoCD runs
+    namespace: default  # Deploy to default namespace
+  
+  # Sync policy: Automatic deployment
+  syncPolicy:
+    automated:
+      selfHeal: true  # Automatically revert manual changes in K8s
+      prune: true     # Delete resources removed from Git
+      allowEmpty: false
+    
+    # Sync options
+    syncOptions:
+    - CreateNamespace=true  # Create namespace if doesn't exist
+    - ApplyOutOfSyncOnly=true
+    - PrunePropagationPolicy=foreground
+    - PruneLast=true
+    
+    # Retry configuration
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  

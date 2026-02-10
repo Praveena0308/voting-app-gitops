@@ -1,0 +1,157 @@
+name: Voting App CI/CD Pipeline
+
+# When to run this workflow
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'vote/**'      # Trigger when vote app changes
+      - 'result/**'    # Trigger when result app changes
+      - 'worker/**'    # Trigger when worker app changes
+  workflow_dispatch:   # Manual trigger from GitHub UI
+
+# Environment variables available to all jobs
+env:
+  DOCKER_REGISTRY: docker.io
+  DOCKER_USERNAME: pravee033  # Your Docker Hub username
+  
+  # Docker image names (CHANGE THESE to your actual repos)
+  VOTE_IMAGE: pravee033/example-voting-app-vote
+  RESULT_IMAGE: pravee033/example-voting-app-result
+  WORKER_IMAGE: pravee033/example-voting-app-worker
+
+# Jobs to execute
+jobs:
+  # JOB 1: Build and push Docker images
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      vote_tag: ${{ steps.set-vars.outputs.vote_tag }}
+      result_tag: ${{ steps.set-vars.outputs.result_tag }}
+      worker_tag: ${{ steps.set-vars.outputs.worker_tag }}
+    
+    steps:
+    # Step 1: Generate unique tags
+    - name: Generate image tags
+      id: set-vars
+      run: |
+        echo "vote_tag=v$(date +%s)-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+        echo "result_tag=v$(date +%s)-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+        echo "worker_tag=v$(date +%s)-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+        echo "Tags generated"
+    
+    # Step 2: Checkout source code from voting app repo
+    - name: Checkout source code
+      uses: actions/checkout@v3
+      with:
+        repository: Praveena0308/example-voting-app
+        path: source-code
+    
+    # Step 3: Set up Docker Buildx
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    # Step 4: Login to Docker Hub (uses GitHub secrets)
+    - name: Login to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ env.DOCKER_REGISTRY }}
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_PASSWORD }}
+    
+    # Step 5: Build and push VOTE image
+    - name: Build and push Vote image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./source-code/vote
+        push: true
+        tags: |
+          ${{ env.VOTE_IMAGE }}:latest
+          ${{ env.VOTE_IMAGE }}:${{ steps.set-vars.outputs.vote_tag }}
+        labels: |
+          org.opencontainers.image.source=${{ github.server_url }}/Praveena0308/example-voting-app
+    
+    # Step 6: Build and push RESULT image
+    - name: Build and push Result image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./source-code/result
+        push: true
+        tags: |
+          ${{ env.RESULT_IMAGE }}:latest
+          ${{ env.RESULT_IMAGE }}:${{ steps.set-vars.outputs.result_tag }}
+        labels: |
+          org.opencontainers.image.source=${{ github.server_url }}/Praveena0308/example-voting-app
+    
+    # Step 7: Build and push WORKER image
+    - name: Build and push Worker image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./source-code/worker
+        push: true
+        tags: |
+          ${{ env.WORKER_IMAGE }}:latest
+          ${{ env.WORKER_IMAGE }}:${{ steps.set-vars.outputs.worker_tag }}
+        labels: |
+          org.opencontainers.image.source=${{ github.server_url }}/Praveena0308/example-voting-app
+    
+    # Step 8: Print success message
+    - name: Print build info
+      run: |
+        echo "✅ Images built and pushed successfully!"
+        echo "Vote: ${{ env.VOTE_IMAGE }}:${{ steps.set-vars.outputs.vote_tag }}"
+        echo "Result: ${{ env.RESULT_IMAGE }}:${{ steps.set-vars.outputs.result_tag }}"
+        echo "Worker: ${{ env.WORKER_IMAGE }}:${{ steps.set-vars.outputs.worker_tag }}"
+
+  # JOB 2: Update GitOps manifests (runs AFTER images are built)
+  update-gitops-manifests:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    
+    steps:
+    # Step 1: Checkout GitOps repo (where this workflow file is)
+    - name: Checkout GitOps repo
+      uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}  # Auto-generated token
+    
+    # Step 2: Update Kubernetes manifests with new image tags
+    - name: Update Kubernetes manifests
+      run: |
+        echo "📝 Updating Kubernetes manifests with new image tags..."
+        echo "Vote tag: ${{ needs.build-and-push.outputs.vote_tag }}"
+        echo "Result tag: ${{ needs.build-and-push.outputs.result_tag }}"
+        echo "Worker tag: ${{ needs.build-and-push.outputs.worker_tag }}"
+        
+        # Update vote-app.yaml
+        sed -i 's|pravee033/voting-vote:.*|pravee033/voting-vote:${{ needs.build-and-push.outputs.vote_tag }}|g' vote-app.yaml
+        echo "✅ Updated vote-app.yaml"
+        
+        # Update result-app.yaml
+        sed -i 's|pravee033/voting-result:.*|pravee033/voting-result:${{ needs.build-and-push.outputs.result_tag }}|g' result-app.yaml
+        echo "✅ Updated result-app.yaml"
+        
+        # Update worker-app.yaml
+        sed -i 's|pravee033/voting-worker:.*|pravee033/voting-worker:${{ needs.build-and-push.outputs.worker_tag }}|g' worker-app.yaml
+        echo "✅ Updated worker-app.yaml"
+        
+        # Show the changes
+        echo "🔍 Updated image references:"
+        grep -n "image:" vote-app.yaml result-app.yaml worker-app.yaml
+    
+    # Step 3: Commit and push changes
+    - name: Commit and push to GitOps repo
+      run: |
+        # Configure git
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Stage, commit, and push
+        git add vote-app.yaml result-app.yaml worker-app.yaml
+        git commit -m "🚀 Deploy voting app v${{ needs.build-and-push.outputs.vote_tag }}"
+        
+        # Push changes
+        git push origin main
+        
+        echo "✅ GitOps repo updated successfully!"
+        echo "📤 ArgoCD will auto-detect changes and deploy to Kubernetes"
