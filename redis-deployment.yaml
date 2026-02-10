@@ -4,7 +4,6 @@ metadata:
   labels:
     app: redis
   name: redis
-
 spec:
   replicas: 1
   selector:
@@ -15,24 +14,15 @@ spec:
       labels:
         app: redis
     spec:
-      # Put redis on database-worker node (same as DB)
-      nodeSelector:
-        role: database-worker
-      
       containers:
       - image: redis:alpine
         name: redis
-        command: ["redis-server", "--appendonly", "yes"]
         ports:
         - containerPort: 6379
           name: redis
         volumeMounts:
         - mountPath: /data
           name: redis-data
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
       volumes:
       - name: redis-data
-        emptyDir: {}
+        emptyDir: {} 

@@ -20,19 +20,6 @@ spec:
       containers:
       - image: pravee033/example-voting-app-worker
         name: worker
-        env:
-        - name: POSTGRES_HOST
-          value: "db.database.svc.cluster.local"  # Fixed: Full service name
-        - name: POSTGRES_USER
-          value: "postgres"
-        - name: POSTGRES_PASSWORD
-          value: "StrongPassword123"
-        - name: POSTGRES_DB
-          value: "postgres"
-        - name: REDIS_HOST
-          value: "redis.messaging.svc.cluster.local"  # Fixed
-        - name: REDIS_PORT
-          value: "6379"
         ports:
         - containerPort: 80
           name: worker

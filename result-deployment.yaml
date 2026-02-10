@@ -20,15 +20,6 @@ spec:
       containers:
       - image: pravee033/example-voting-app-result
         name: result
-        env:
-        - name: POSTGRES_HOST
-          value: "db.database.svc.cluster.local"
-        - name: POSTGRES_USER
-          value: "postgres"
-        - name: POSTGRES_PASSWORD
-          value: "StrongPassword123"
-        - name: POSTGRES_DB
-          value: "votes"
         ports:
         - containerPort: 80
           name: result
