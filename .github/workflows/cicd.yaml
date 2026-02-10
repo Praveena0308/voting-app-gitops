@@ -16,9 +16,9 @@ env:
   DOCKER_USERNAME: pravee033  # Your Docker Hub username
   
   # Docker image names (CHANGE THESE to your actual repos)
-  VOTE_IMAGE: pravee033/example-voting-app-vote
-  RESULT_IMAGE: pravee033/example-voting-app-result
-  WORKER_IMAGE: pravee033/example-voting-app-worker
+  VOTE_IMAGE: pravee033/voting-vote
+  RESULT_IMAGE: pravee033/voting-result
+  WORKER_IMAGE: pravee033/voting-worker
 
 # Jobs to execute
 jobs:
