@@ -18,7 +18,7 @@ spec:
       # Put result pods on result-processor nodes
       
       containers:
-      - image: pravee033/voting-result:latest
+      - image: pravee033/example-voting-app-result
         name: result
         env:
         - name: POSTGRES_HOST
