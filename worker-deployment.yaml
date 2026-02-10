@@ -5,7 +5,6 @@ metadata:
   labels:
     app: worker
   name: worker
-
 spec:
   replicas: 3
   selector:
@@ -15,11 +14,8 @@ spec:
     metadata:
       labels:
         app: worker
-    
     sepc: 
       containers:
       - image: pravee033/example-voting-app-worker
         name: worker
-        ports:
-        - containerPort: 80
-          name: worker
+        
